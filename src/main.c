@@ -302,7 +302,7 @@ proccedKey(struct state* st)
 int
 main (int argc, char** argv)
 {
-	struct state st;
+	struct state st = {0};
 	st.status = "tiwula is a cutie pie";
 	st.curx = 0;
 	st.cury = 0;
