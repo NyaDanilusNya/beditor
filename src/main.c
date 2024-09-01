@@ -25,6 +25,7 @@ sint()
 {
 	printf("\e[?25h");
 	tcsetattr(STDIN_FILENO, TCSANOW, &term);
+	printf("\n");
 }
 
 unsigned char
