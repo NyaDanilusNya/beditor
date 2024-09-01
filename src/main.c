@@ -61,6 +61,72 @@ getvald()
 	}
 }
 
+unsigned char
+getvalx()
+{
+	char ch = 0;
+	char b[3];
+	int c = 0;
+	int ret;
+	while (1)
+	{
+		ch = getchar();
+		if (ch == 13)
+		{
+			sscanf(b, "%x", &ret);	
+			if (ret > 255)
+				return 255;
+			return ret;
+		}
+		else if ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f'))
+		{
+			b[c] = ch;
+			c++;
+			b[c] = '\0';
+			if (c == 2)
+			{
+				sscanf(b, "%x", &ret);	
+				if (ret > 255)
+					return 255;
+				return ret;
+			}
+		}
+	}
+}
+
+char
+getvalc()
+{
+	char ch;
+	while (1)
+	{
+		ch = getchar();
+		printf("%d %c", ch, ch);
+		if (ch >= 32 && ch <= 126)
+			return ch;
+	}
+}
+
+unsigned char
+getval(int mode)
+{
+	switch (mode)
+	{
+		case 0:
+			return getvald();
+			break;
+		case 1:
+			return getvalx();
+			break;
+		case 2:
+			return (char)getvalc();
+			break;
+		default:
+			return 0;
+			break;
+	}
+}
+
 void
 setup()
 {
@@ -145,7 +211,7 @@ proccedKey(struct state* st)
 			{
 				st->len++;
 				st->buf = malloc(st->len);
-				st->buf[0] = getvald();
+				st->buf[0] = getval(st->mode);
 				break;
 			}
 			st->len++;
@@ -156,7 +222,7 @@ proccedKey(struct state* st)
 			memcpy(st->buf+pos+2, oldbuf+pos+1,
 					st->len-(pos+2));
 			free(oldbuf);
-			st->buf[pos+1] = getvald();
+			st->buf[pos+1] = getval(st->mode);
 			break;
 		case 105: // i
 			st->status="Insert";
@@ -165,7 +231,7 @@ proccedKey(struct state* st)
 			{
 				st->len++;
 				st->buf = malloc(st->len);
-				st->buf[0] = getvald();
+				st->buf[0] = getval(st->mode);
 				break;
 			}
 			st->len++;
@@ -176,11 +242,12 @@ proccedKey(struct state* st)
 			memcpy(st->buf+pos+1, oldbuf+pos,
 					st->len-(pos+1));
 			free(oldbuf);
-			st->buf[pos] = getvald();
+			st->buf[pos] = getval(st->mode);
 			break;
 		case 114: // r
 			st->status="Replace";
-			st->buf[cortopos(st->curx, st->cury)] = getvald();
+			printText(st);
+			st->buf[cortopos(st->curx, st->cury)] = getval(st->mode);
 			break;
 		case 100: // d
 			printf("\e[EDelete");
