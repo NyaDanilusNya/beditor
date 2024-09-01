@@ -20,5 +20,6 @@ The result can be found in the `bin/` directory.
 - `r` - replace
 - `d` - delete
 - `w` - write file
+- `m` - change mode
 - `^C` - quit
 - *arrows* - move
