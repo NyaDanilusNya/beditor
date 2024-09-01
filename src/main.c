@@ -4,15 +4,20 @@
 #include <unistd.h>
 #include <string.h>
 
+struct state
+{
+	int curx, cury, mode, len;
+	char ch;
+	char *buf, *status, *filename;
+};
 
-int curx=0,cury=0;
 
 struct termios term, nterm;
 
 int
 cortopos(int x, int y)
 {
-	return cury*10+curx;
+	return y*10+x;
 }
 
 void
@@ -22,10 +27,10 @@ sint()
 	tcsetattr(STDIN_FILENO, TCSANOW, &term);
 }
 
-char
+unsigned char
 getvald()
 {
-	char ch;
+	char ch = 0;
 	char b[4];
 	int c = 0;
 	int ret;
@@ -55,175 +60,217 @@ getvald()
 	}
 }
 
-int
-main (int argc, char** argv)
+void
+setup()
 {
-	int mode = 0;
-	char* status = "tiwula is a cutie pie";
-	if (argc < 2)
-		return 1;
-	if (argc >= 3)
-	{
-		if (argv[2][0] == 'x')
-			mode = 1;
-		else if (argv[2][0] == 'd')
-			mode = 0;
-	}
-	FILE *f = fopen(argv[1], "rb");
-	if (!f)
-	{
-		perror("cannot open file");
-	}
 	atexit(sint);
 	printf("\e[?25l");
 	tcgetattr(STDIN_FILENO, &term);
 	nterm = term;
 	cfmakeraw(&nterm);
-	
 	tcsetattr(STDIN_FILENO, TCSANOW, &nterm);
-	fseek(f, 0, SEEK_END);
-	int len = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	char* buf = malloc(len);
-	fread(buf, 1, len , f);
-	fclose(f);
-	char ch;
-	char loop = 1;
+}
+
+void
+printText(struct state* st)
+{
+	printf("\e[H\e[J");
+	for (int i = 0; i < st->len; i++)
+	{
+		if (st->cury*10+st->curx == i)
+			printf("\e[1;41m");
+		else
+			printf("\e[0m");
+
+		if (st->mode == 1)
+			printf("%X ", st->buf[i]);
+		else if (st->mode == 0)
+			printf("%d ", st->buf[i]);
+		else if (st->mode == 2)
+			printf("[%c] ", st->buf[i]);
+
+		if (i%10 == 9)
+			printf("\e[E");
+	}
+	printf("\e[E\e[0m(%d)[%d]{%s}|%dx%d|", st->ch, st->mode, st->status, st->curx, st->cury);
+}
+
+int
+proccedKey(struct state* st)
+{
 	char *oldbuf;
 	int pos;
+	switch (st->ch)
+	{
+		case 3: // ^C
+			return 0;
+			break;
+		case 68: // left
+			if (st->curx > 0)
+			{
+				st->curx--;
+			}
+			else if (st->cury > 0)
+			{
+				st->curx = 9;
+				st->cury--;
+			}
+			break;
+		case 67: // right
+			if (st->cury*10+st->curx == st->len-1)
+				break;
+			if (st->curx >= 9)
+			{
+				st->curx = 0;
+				st->cury++;
+			}
+			else
+			{
+				st->curx++;
+			}
+			break;
+		case 66: // down
+			if (st->cury < st->len/10)
+				st->cury++;
+			break;
+		case 65: // up
+			if (st->cury > 0)
+				st->cury--;
+			break;
+		case 97: // a
+			st->status = "Append";
+			printText(st);
+			if (st->len == 0)
+			{
+				st->len++;
+				st->buf = malloc(st->len);
+				st->buf[0] = getvald();
+				break;
+			}
+			st->len++;
+			oldbuf = st->buf;
+			st->buf = malloc(st->len);
+			pos = cortopos(st->curx, st->cury);
+			memcpy(st->buf, oldbuf, pos+1);
+			memcpy(st->buf+pos+2, oldbuf+pos+1,
+					st->len-(pos+2));
+			free(oldbuf);
+			st->buf[pos+1] = getvald();
+			break;
+		case 105: // i
+			st->status="Insert";
+			printText(st);
+			if (st->len == 0)
+			{
+				st->len++;
+				st->buf = malloc(st->len);
+				st->buf[0] = getvald();
+				break;
+			}
+			st->len++;
+			oldbuf = st->buf;
+			st->buf = malloc(st->len);
+			pos = cortopos(st->curx, st->cury);
+			memcpy(st->buf, oldbuf, pos);
+			memcpy(st->buf+pos+1, oldbuf+pos,
+					st->len-(pos+1));
+			free(oldbuf);
+			st->buf[pos] = getvald();
+			break;
+		case 114: // r
+			st->status="Replace";
+			st->buf[cortopos(st->curx, st->cury)] = getvald();
+			break;
+		case 100: // d
+			printf("\e[EDelete");
+			if (st->len == 0)
+				break;
+			st->len--;
+			if (st->len == 0)
+			{
+				free(st->buf);
+				st->curx = 0;
+				st->cury = 0;
+				break;
+			}
+			oldbuf = st->buf;
+			st->buf = malloc(st->len);
+			pos = cortopos(st->curx, st->cury);
+			memcpy(st->buf, oldbuf, pos);
+			memcpy(st->buf+pos, oldbuf+pos+1,
+					st->len-pos);
+			free(oldbuf);
+			if (pos>st->len-1)
+			{
+				if (st->curx == 0 && st->cury > 0)
+				{
+					st->cury--;
+					st->curx = 9;
+				}	
+				else if(st->curx > 0)
+					st->curx--;
+			}
+			break;
+		case 119: // w
+			st->status="Wrote";
+			FILE* f = fopen(st->filename, "wb");
+			if (!f)
+			{
+				perror("cannot open file");
+			}
+			fwrite(st->buf, 1 ,st->len, f);
+			fclose(f);
+			break;
+		case 109: // m
+			st->status="Mode has changed";
+			st->mode++;
+			if (st->mode == 3) st->mode = 0;
+			break;
+	}
+	return 1;
+}
+
+int
+main (int argc, char** argv)
+{
+	struct state st;
+	st.status = "tiwula is a cutie pie";
+	if (argc < 2)
+	{
+		puts("Usage: beditor <file> [d|x|c]\n\td - decimal mode\n\tx - hexadecimal\n\tc - char");
+		return 1;
+	}
+	if (argc >= 3)
+	{
+		if (argv[2][0] == 'd')
+			st.mode = 0;
+		else if (argv[2][0] == 'x')
+			st.mode = 1;
+		else if (argv[2][0] == 'c')
+			st.mode = 2;
+	}
+	st.filename = argv[1];
+	setup();
+	FILE *f = fopen(st.filename, "rb");
+	if (f)
+	{
+		fseek(f, 0, SEEK_END);
+		st.len = ftell(f);
+		fseek(f, 0, SEEK_SET);
+		st.buf = malloc(st.len);
+		fread(st.buf, 1, st.len , f);
+		fclose(f);
+	}
+	else
+	{
+		st.len = 0;
+	}
+	char loop = 1;
 	while (loop)
 	{
-		printf("\e[H\e[J");
-		for (int i = 0; i < len; i++)
-		{
-			if (cury*10+curx == i)
-				printf("\e[1;41m");
-			else
-				printf("\e[0m");
-			
-			if (mode == 1)
-				printf("%X ", buf[i]);
-			else if (mode == 0)
-				printf("%d ", buf[i]);
-			else if (mode == 2)
-				printf("[%c] ", buf[i]);
-
-			if (i%10 == 9)
-				printf("\e[E");
-		}
-		printf("\e[E\e[0m(%d)[%d]{%s}|%dx%d|", ch, mode, status, curx, cury);
-		ch = getchar();
-		switch (ch)
-		{
-			case 3: // ^C
-				loop = 0;
-				break;
-			case 68:
-				if (curx > 0)
-					curx--;
-				break;
-			case 67:
-				if (cury*10+curx == len-1)
-					break;
-				if (curx >= 9)
-				{
-					curx = 0;
-					cury++;
-				}
-				else
-				{
-					curx++;
-				}
-				break;
-			case 66:
-				if (cury < len/10)
-					cury++;
-				break;
-			case 65:
-				if (cury > 0)
-					cury--;
-				break;
-			case 97:
-				status = "Append";
-				if (len == 0)
-				{
-					len++;
-					buf = malloc(len);
-					buf[0] = getvald();
-					break;
-				}
-				len++;
-				oldbuf = buf;
-				buf = malloc(len);
-				pos = cortopos(curx, cury);
-				memcpy(buf, oldbuf, pos+1);
-				memcpy(buf+pos+2, oldbuf+pos+1,
-						len-(pos+2));
-				free(oldbuf);
-				buf[pos+1] = getvald();
-				break;
-			case 105:
-				status="Insert";
-				if (len == 0)
-				{
-					len++;
-					buf = malloc(len);
-					buf[0] = getvald();
-					break;
-				}
-				len++;
-				oldbuf = buf;
-				buf = malloc(len);
-				pos = cortopos(curx, cury);
-				memcpy(buf, oldbuf, pos);
-				memcpy(buf+pos+1, oldbuf+pos,
-						len-(pos+1));
-				free(oldbuf);
-				buf[pos] = getvald();
-				break;
-			case 114:
-				status="Replace";
-				buf[cortopos(curx, cury)] = getvald();
-				break;
-			case 100:
-				printf("\e[ERemove");
-				if (len == 0)
-					break;
-				len--;
-				oldbuf = buf;
-				buf = malloc(len);
-				pos = cortopos(curx, cury);
-				memcpy(buf, oldbuf, pos);
-				memcpy(buf+pos, oldbuf+pos+1,
-					 len-pos);
-				free(oldbuf);
-				if (pos>len-1)
-				{
-					if (curx == 0 && cury > 0)
-					{
-						cury--;
-						curx = 9;
-					}	
-					else if(curx > 0)
-						curx--;
-				}
-				break;
-			case 119:
-				status="Wrote";
-				f = fopen(argv[1], "wb");
-				if (!f)
-				{
-					perror("cannot open file");
-				}
-				fwrite(buf, 1 , len, f);
-				fclose(f);
-				break;
-			case 109:
-				status="Mode has changed";
-				mode++;
-				if (mode == 3) mode = 0;
-				break;
-		}
+		printText(&st);
+		st.ch = getchar();
+		loop = proccedKey(&st);
 	}
 	sint();
 	return 0;
