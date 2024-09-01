@@ -8,7 +8,8 @@ struct state
 {
 	int curx, cury, mode, len;
 	char ch;
-	char *buf, *status, *filename;
+	char *status, *filename;
+	unsigned char *buf;
 };
 
 
@@ -165,7 +166,7 @@ printText(struct state* st)
 int
 proccedKey(struct state* st)
 {
-	char *oldbuf;
+	unsigned char *oldbuf;
 	int pos;
 	switch (st->ch)
 	{
