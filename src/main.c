@@ -304,6 +304,8 @@ main (int argc, char** argv)
 {
 	struct state st;
 	st.status = "tiwula is a cutie pie";
+	st.curx = 0;
+	st.cury = 0;
 	if (argc < 2)
 	{
 		puts("Usage: beditor <file> [d|x|c]\n\td - decimal mode\n\tx - hexadecimal\n\tc - char");
@@ -317,6 +319,8 @@ main (int argc, char** argv)
 			st.mode = 1;
 		else if (argv[2][0] == 'c')
 			st.mode = 2;
+		else
+			st.mode = 0;
 	}
 	st.filename = argv[1];
 	setup();
@@ -341,6 +345,8 @@ main (int argc, char** argv)
 		st.ch = getchar();
 		loop = proccedKey(&st);
 	}
+	if(st.buf)
+		free(st.buf);
 	sint();
 	return 0;
 }
