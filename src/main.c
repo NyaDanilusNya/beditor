@@ -122,6 +122,9 @@ getval(int mode)
 		case 2:
 			return (char)getvalc();
 			break;
+		case 3:
+			return (char)getvalc();
+			break;
 		default:
 			return 0;
 			break;
@@ -156,11 +159,19 @@ printText(struct state* st)
 			printf("%d ", st->buf[i]);
 		else if (st->mode == 2)
 			printf("[%c] ", st->buf[i]);
+		else if (st->mode == 3)
+		{
+			if (st->buf[i] == '\n')
+				printf("\e[E");
+			else
+				putchar(st->buf[i]);
+		}
 
-		if (i%10 == 9)
+		if (i%10 == 9 && st->mode != 3)
 			printf("\e[E");
 	}
 	printf("\e[E\e[0m(%d)[%d]{%s}|%dx%d|", st->ch, st->mode, st->status, st->curx, st->cury);
+	fflush(stdout);
 }
 
 int
@@ -293,7 +304,7 @@ proccedKey(struct state* st)
 		case 109: // m
 			st->status="Mode has changed";
 			st->mode++;
-			if (st->mode == 3) st->mode = 0;
+			if (st->mode == 4) st->mode = 0;
 			break;
 	}
 	return 1;
